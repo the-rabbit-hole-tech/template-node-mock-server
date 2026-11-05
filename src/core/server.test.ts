@@ -345,6 +345,27 @@ describe("controls", () => {
     );
   });
 
+  it("shows the product's summary as tiles", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(
+      html,
+      /<div class="tile"><span class="tile__label">notes<\/span><span class="tile__value">2<\/span><\/div>/,
+    );
+  });
+
+  it("lays out the shell: rail toggle, mock badge, sidebar and page head", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(html, /<span class="badge badge--env">Mock<\/span>/);
+    assert.match(
+      html,
+      /<aside class="sidebar" id="sidebar" aria-label="Sidebar">/,
+    );
+    assert.match(
+      html,
+      /<span class="eyebrow">Mock gateway<\/span><h1 class="title">Controls<\/h1>/,
+    );
+  });
+
   it("still drives the controls from the page", async () => {
     const html = await (await fetch(`${base}/_mock`)).text();
     assert.match(html, /fetch\("\/_mock\/controls"/);
@@ -605,6 +626,28 @@ describe("maintenance", () => {
     assert.deepEqual(
       heard.map((change) => (change as { state: string }).state),
       ["active", "none"],
+    );
+  });
+
+  it("shows the window as a banner across the page", async () => {
+    const quiet = await (await fetch(`${base}/_mock`)).text();
+    assert.doesNotMatch(quiet, /class="banner/);
+    await control(base, {
+      kind: "maintenance-announce",
+      message: "Upgrading the database",
+      ...window(hour, hour),
+    });
+    const announced = await (await fetch(`${base}/_mock`)).text();
+    assert.match(
+      announced,
+      /<div class="banner banner--announced" role="region" aria-label="Maintenance">/,
+    );
+    assert.match(announced, /Upgrading the database/);
+    await control(base, { kind: "maintenance-start" });
+    const on = await (await fetch(`${base}/_mock`)).text();
+    assert.match(
+      on,
+      /<div class="banner banner--active" role="region" aria-label="Maintenance">/,
     );
   });
 
