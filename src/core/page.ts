@@ -170,6 +170,15 @@ pre {
   border: 1px solid var(--frame-border); border-radius: calc(var(--frame-radius) - 2px);
   background: var(--frame-bg); color: var(--frame-ink); font: 0.8125rem/1.5 var(--frame-font-mono);
 }
+.field { display: flex; flex-direction: column; gap: 0.25rem; min-width: 12rem; flex: 1; }
+.field label { color: var(--frame-muted); font-size: 0.8125rem; font-weight: 600; }
+.field input {
+  min-height: 2.5rem; padding: 0 0.75rem; border: 1px solid var(--frame-border);
+  border-radius: calc(var(--frame-radius) - 2px); background: var(--frame-bg); color: var(--frame-ink);
+  font: 0.9375rem/1.25rem var(--frame-font-sans);
+}
+.window { margin: 0; color: var(--frame-ink); font-size: 0.875rem; }
+.window strong { font-family: var(--frame-font-mono); letter-spacing: 0.04em; text-transform: uppercase; }
 .legal { margin: 0; color: var(--frame-muted); font-size: 0.75rem; line-height: 1.125rem; }
 .scrim { display: none; }
 @media (max-width: 899px) {
@@ -203,7 +212,12 @@ const SCRIPT = `
   const slug = (text) => "section-" + text.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const send = async (body) => {
     const answer = await fetch("/_mock/controls", { body: JSON.stringify(body), headers: { "content-type": "application/json" }, method: "POST" });
-    if (!answer.ok) { status.className = "status down"; $("status-text").textContent = "That didn't work: " + answer.status; return; }
+    if (!answer.ok) {
+      const refused = await answer.json().catch(() => ({}));
+      status.className = "status down";
+      $("status-text").textContent = "That didn't work: " + (refused.error ?? answer.status);
+      return;
+    }
     await refresh();
   };
   const navItem = (href, label) => {
@@ -251,7 +265,8 @@ const SCRIPT = `
     try {
       const state = await (await fetch("/_mock/controls")).json();
       status.className = "status";
-      $("status-text").textContent = state.sessions.length + " signed in" + (state.failNext ? ", the next call fails" : "") + (state.needsSetup ? ", first-run setup is on" : "") + (state.freshAt ? ", started fresh " + new Date(state.freshAt).toLocaleTimeString() : "");
+      $("status-text").textContent = state.sessions.length + " signed in" + (state.failNext ? ", the next call fails" : "") + (state.needsSetup ? ", first-run setup is on" : "") + (state.maintenance.state === "active" ? ", maintenance is on" : state.maintenance.state === "announced" ? ", maintenance announced" : "") + (state.freshAt ? ", started fresh " + new Date(state.freshAt).toLocaleTimeString() : "");
+      showWindow(state.maintenance);
       draw(state.actions);
       $("summary").textContent = JSON.stringify(state.summary, null, 2);
     } catch { status.className = "status down"; $("status-text").textContent = "The mock server isn't answering."; }
@@ -261,6 +276,22 @@ const SCRIPT = `
     $("person").replaceChildren(...list.filter((p) => !p.disabled).map((p) => { const o = document.createElement("option"); o.value = p.id; o.textContent = p.name + " (" + p.username + ")"; return o; }));
   };
   $("sign-in").addEventListener("click", () => send({ kind: "sign-in", personId: $("person").value }));
+
+  const when = (id) => { const value = $(id).value; return value ? new Date(value).toISOString() : undefined; };
+  const windowBody = () => ({ endsAt: when("maintenance-end"), message: $("maintenance-message").value || undefined, startsAt: when("maintenance-start") });
+  const local = (iso) => new Date(iso).toLocaleString();
+  const showWindow = (window) => {
+    const span = (window.startsAt ? " from " + local(window.startsAt) : "") + (window.endsAt ? " until " + local(window.endsAt) : "");
+    const said = window.message ? ": " + window.message : "";
+    const line = $("maintenance-window");
+    if (window.state === "none") { line.textContent = "No maintenance planned."; return; }
+    line.replaceChildren(Object.assign(document.createElement("strong"), { textContent: window.state === "active" ? "On now" : "Announced" }), span + said);
+  };
+  $("maintenance-announce").addEventListener("click", () => send({ ...windowBody(), kind: "maintenance-announce" }));
+  $("maintenance-go").addEventListener("click", () => send({ ...windowBody(), kind: "maintenance-start" }));
+  $("maintenance-update").addEventListener("click", () => send({ ...windowBody(), kind: "maintenance-update" }));
+  $("maintenance-stop").addEventListener("click", () => send({ kind: "maintenance-end" }));
+  $("maintenance-cancel").addEventListener("click", () => send({ kind: "maintenance-cancel" }));
 
   const toggle = $("theme-toggle");
   toggle.addEventListener("click", async () => {
@@ -322,6 +353,7 @@ const page = (saved: null | Theme) => {
         <nav class="nav-group" aria-label="Controls">
           <a class="nav-item" href="#overview" aria-current="true">Overview</a>
           <a class="nav-item" href="#sign-in-card">Sign in as</a>
+          <a class="nav-item" href="#maintenance">Maintenance</a>
           <div class="nav-group" id="nav-actions"></div>
           <a class="nav-item" href="#data">Data</a>
         </nav>
@@ -351,6 +383,23 @@ const page = (saved: null | Theme) => {
           <button class="button button--primary" id="sign-in" type="button">Sign in here</button>
         </div>
         <p class="hint">Any password works except "wrong-password"; any six digits except 000000.</p>
+      </section>
+      <section class="card" id="maintenance" aria-labelledby="maintenance-title">
+        <h2 id="maintenance-title">Maintenance</h2>
+        <p class="window" id="maintenance-window" aria-live="polite">No maintenance planned.</p>
+        <div class="row">
+          <div class="field"><label for="maintenance-start">Starts</label><input id="maintenance-start" type="datetime-local"></div>
+          <div class="field"><label for="maintenance-end">Ends</label><input id="maintenance-end" type="datetime-local"></div>
+        </div>
+        <div class="field"><label for="maintenance-message">Message</label><input id="maintenance-message" type="text" placeholder="What clients tell people"></div>
+        <div class="row">
+          <button class="button button--primary" id="maintenance-announce" type="button">Announce</button>
+          <button class="button" id="maintenance-go" type="button">Start now</button>
+          <button class="button" id="maintenance-update" type="button">Update the window</button>
+          <button class="button" id="maintenance-stop" type="button">End maintenance</button>
+          <button class="button" id="maintenance-cancel" type="button">Cancel the announcement</button>
+        </div>
+        <p class="hint">While it's on, the gateway paths answer 503 with a Retry-After and /readyz isn't ready; this page, /livez and the product's banner fields keep answering.</p>
       </section>
       <div id="actions" style="display: contents"></div>
       <section class="card" id="data" aria-labelledby="data-title">
