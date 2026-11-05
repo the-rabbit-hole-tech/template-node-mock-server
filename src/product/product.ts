@@ -1,22 +1,30 @@
 // Copyright 2026 The template-node-mock-server Authors
 // SPDX-License-Identifier: Apache-2.0
-// Who this mock is. A product changes these values (and the files beside this one) when it
-// clones the template; nothing in src/core names a product.
+// Who this mock is, and everything it serves: the one object src/serve.ts hands the core. A
+// product changes these settings, and the files beside this one, when it clones the template;
+// src/core never imports anything from this folder.
 
-export const product = {
-  /** The product's name, on the controls page and in the ready line. */
-  name: "Example",
-  /** The port the mock listens on unless --port or PORT says otherwise. */
-  port: 5180,
-  /**
-   * Root fields anyone may ask for before signing in. An operation runs without a session only
-   * when every root field it selects is in this list.
-   */
-  publicFields: ["serverInfo"],
-  /** The session cookie. Take the real gateway's name, so a client's live code reads it unchanged. */
-  sessionCookie: process.env.MOCK_SESSION_COOKIE || "example_session",
-  /** The version the mock reports: a release shape clients can parse. */
-  version: process.env.MOCK_SERVER_VERSION || "v0.1.0-mock",
-  /** The response header the health probes carry the version in. */
-  versionHeader: "Example-Version",
+import { readFileSync } from "node:fs";
+
+import type { Product } from "#core/product.ts";
+
+import { productActions, productSummary } from "#product/controls.ts";
+import { seed } from "#product/data.ts";
+import { resolvers } from "#product/resolvers.ts";
+
+export const example: Product = {
+  actions: productActions,
+  resolvers,
+  schema: readFileSync(new URL("schema.graphql", import.meta.url), "utf8"),
+  seed,
+  settings: {
+    graphqlPath: "/query",
+    name: "Example",
+    port: 5180,
+    publicFields: ["serverInfo"],
+    sessionCookie: "example_session",
+    version: "v0.1.0-mock",
+    versionHeader: "Example-Version",
+  },
+  summary: productSummary,
 };

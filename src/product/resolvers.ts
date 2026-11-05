@@ -4,8 +4,6 @@
 // mockState.data, and publish changes so every open subscription, from every client, hears them.
 // A product replaces these with resolvers for its own schema; src/core wires them in by name.
 
-import type { Item } from "#product/data.ts";
-
 import { publish, subscribe } from "#core/events.ts";
 import {
   type Context,
@@ -15,8 +13,9 @@ import {
   withRole,
 } from "#core/graphql.ts";
 import { newId } from "#core/http.ts";
+import { settings } from "#core/product.ts";
 import { mockState, personById } from "#core/state.ts";
-import { product } from "#product/product.ts";
+import { data, type Item } from "#product/data.ts";
 
 const ITEM_CHANGED = "item-changed";
 
@@ -26,7 +25,7 @@ interface ItemChange {
 }
 
 const itemById = (id: string): Item => {
-  const item = mockState.data.items.find((candidate) => candidate.id === id);
+  const item = data().items.find((candidate) => candidate.id === id);
   if (!item) throw new MockError("NOT_FOUND", "That item doesn't exist.");
   return item;
 };
@@ -57,15 +56,13 @@ export const resolvers: Resolvers = {
         title,
         updatedAt: new Date().toISOString(),
       };
-      mockState.data.items.push(item);
+      data().items.push(item);
       return changed({ item, kind: "CREATED" });
     },
     deleteItem: (_root, given: { id: string }, context: Context) => {
       withRole(context, "ADMIN");
       const item = itemById(given.id);
-      mockState.data.items = mockState.data.items.filter(
-        (kept) => kept.id !== item.id,
-      );
+      data().items = data().items.filter((kept) => kept.id !== item.id);
       changed({ item, kind: "DELETED" });
       return true;
     },
@@ -86,22 +83,22 @@ export const resolvers: Resolvers = {
   Query: {
     item: (_root, given: { id: string }, context: Context) => {
       signedIn(context);
-      return mockState.data.items.find((item) => item.id === given.id) ?? null;
+      return data().items.find((item) => item.id === given.id) ?? null;
     },
     items: (_root, given: { status?: Item["status"] }, context: Context) => {
       signedIn(context);
-      return mockState.data.items.filter(
+      return data().items.filter(
         (item) => !given.status || item.status === given.status,
       );
     },
     people: (_root, _arguments, context: Context) => {
       signedIn(context);
-      return mockState.data.people.filter((p) => !p.disabled);
+      return data().people.filter((p) => !p.disabled);
     },
     serverInfo: () => ({
-      name: product.name,
+      name: settings().name,
       needsSetup: mockState.needsSetup,
-      version: product.version,
+      version: settings().version,
     }),
     viewer: (_root, _arguments, context: Context) => signedIn(context),
   },
