@@ -81,9 +81,9 @@ subscription. Replace it; don't build around it.
    tests run against a fixture product of their own (`src/core/test-fixture.ts`), never
    `src/product/`, so they pass unchanged whatever the product is.
 
-9. Run the checks, then commit in one PR and say in its body which template commit the product
-   started from (`git log -1 --format=%H` before step 2). That commit is where the next sync
-   starts.
+9. Run the checks, then commit in one PR and say in its body which template release the product
+   started from: the tag of the release the clone came from (the newest one on the template's
+   Releases page when it was made, for example `v1.2.0`). That tag is where the next sync starts.
 
    ```bash
    npm run lint
@@ -93,27 +93,30 @@ subscription. Replace it; don't build around it.
 
 ## 🔁 Taking later template fixes
 
-A fix to the core lands here first; each product then takes it in its own PR, commit by commit.
+A fix to the core lands here first, and every merge here publishes a release. Each product then
+takes the fixes in its own PR, from the release it last synced to a newer one: always tag to tag,
+never from a commit between releases.
 
 1. Add the template as a second remote, once, and fetch it:
 
    ```bash
    git remote add template https://github.com/the-rabbit-hole-tech/template-node-mock-server.git
-   git fetch template
+   git fetch template --tags
    ```
 
-2. On a branch, list the template commits since the last sync and take each fix:
+2. On a branch, list the template's commits between the release the product last synced to and
+   the release it's syncing to, and take each fix:
 
    ```bash
-   git log --oneline <last-synced>..template/main
+   git log --oneline <last-tag>..<new-tag>
    git cherry-pick -x <commit>
    ```
 
-   `-x` records the template commit in the product's commit message, so the next sync knows where
-   to start.
+   `-x` records the template commit in the product's commit message. Name both tags in the PR
+   body; the new one is where the next sync starts.
 
 3. A conflict in `src/product/` keeps the product's side. A conflict in `src/core/` is a place the
-   product changed the core (the GraphQL path, the sign-in): keep the product's change and the
+   product changed the core (its sign-in in `auth.ts`): keep the product's change and the
    template's fix around it.
 
 4. Run the checks and open the PR.
