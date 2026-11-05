@@ -10,9 +10,9 @@ wire protocol with resettable invented data. It's a public template: products cl
 own `<product>-mock-server` repo and fill in `src/product/`. Two things to understand before
 changing it:
 
-- **`src/core/` is shared, `src/product/` is not.** Nothing in `src/core/` may name a product or
-  read a product's records directly; it reaches the product only through the five files in
-  `src/product/`. A fix to the core lands here and goes to every product as a cherry-pick
+- **`src/core/` is shared, `src/product/` is not.** Nothing in `src/core/` imports from
+  `src/product/`: the core is handed its product through `useProduct()` (`src/core/product.ts`),
+  which `src/serve.ts` calls with the sample and the core tests call with their own fixture. A fix to the core lands here and goes to every product as a cherry-pick
   (TEMPLATE.md), so keep core files and their names stable.
 - **Every answer goes through the product's schema.** Resolvers return plain data; GraphQL
   execution against `src/product/schema.graphql` shapes it. Don't build response bodies for
@@ -24,13 +24,16 @@ changing it:
   `src/serve.ts`.
 - `src/serve.ts` - starts the server and prints the ready lines.
 - `src/index.ts` - what in-process tests import.
-- `src/core/` - `server.ts` (HTTP, HTTPS, websocket upgrade), `handle.ts` (routing, `/query`,
+- `src/core/` - `server.ts` (HTTP, HTTPS, websocket upgrade), `handle.ts` (routing, the GraphQL path,
   CORS), `graphql.ts` (schema, execution, error codes), `websocket.ts` (both subscription
   protocols), `auth.ts` (`/auth/*`, cookie and bearer sessions), `setup.ts` (`/setup/*`),
   `health.ts`, `controls.ts` and `page.ts` (`/_mock`), `state.ts`, `events.ts`, `log.ts`.
-- `src/product/` - `product.ts`, `schema.graphql`, `data.ts`, `resolvers.ts`, `controls.ts`.
-- `src/core/server.test.ts` - the tests, against a real server on a free port;
-  `src/core/test-client.ts` holds their helpers.
+- `src/core/product.ts` - the contract: the `Product` shape, `useProduct()` and `settings()`.
+- `src/product/` - `product.ts` (the definition the core is handed), `schema.graphql`, `data.ts`,
+  `resolvers.ts`, `controls.ts`, and `product.test.ts` for the sample's own tests.
+- `src/core/server.test.ts` - the core's tests, against a real server on a free port, serving the
+  test-only fixture in `src/core/test-fixture.ts`; `src/core/test-client.ts` holds their helpers.
+  They never touch `src/product/`, so a product's re-brand can't break them.
 
 ## Build, test, lint
 

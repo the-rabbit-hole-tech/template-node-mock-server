@@ -10,13 +10,13 @@
 
 import { cookieOf, json, newId, readJson, refuse } from "#core/http.ts";
 import { createLogger } from "#core/log.ts";
+import { settings } from "#core/product.ts";
 import {
   mockState,
   type Person,
   personById,
   type Session,
 } from "#core/state.ts";
-import { product } from "#product/product.ts";
 
 export const WRONG_PASSWORD = "wrong-password";
 export const WRONG_CODE = "000000";
@@ -27,7 +27,7 @@ const SESSION_SECONDS = 1800;
 const log = createLogger("auth");
 
 const cookie = (sid: string, maxAge: number) =>
-  `${product.sessionCookie}=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${String(maxAge)}`;
+  `${settings().sessionCookie}=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${String(maxAge)}`;
 
 const bearerOf = (request: Request): null | string => {
   const header = request.headers.get("authorization") ?? "";
@@ -44,7 +44,7 @@ export const sessionOfToken = (
 
 /** The session behind the request's cookie alone, with no CSRF check (safe reads, websockets). */
 export const sessionOfCookie = (request: Request): null | Session => {
-  const sid = cookieOf(request.headers.get("cookie"), product.sessionCookie);
+  const sid = cookieOf(request.headers.get("cookie"), settings().sessionCookie);
   return sid ? (mockState.sessions.get(sid) ?? null) : null;
 };
 

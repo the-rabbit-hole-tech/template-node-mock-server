@@ -1,5 +1,8 @@
 // Copyright 2026 The template-node-mock-server Authors
 // SPDX-License-Identifier: Apache-2.0
+// The core's tests. They run against the test-only fixture product (src/core/test-fixture.ts),
+// never src/product, so they pass unchanged in a product that replaced the sample.
+
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
 
@@ -18,6 +21,7 @@ import {
   startFresh,
   WRONG_CODE,
 } from "#core/test-client.ts";
+import { FIXTURE_VERSION } from "#core/test-fixture.ts";
 
 let base = "";
 let server: RunningMockServer;
@@ -33,11 +37,11 @@ beforeEach(() => {
 });
 
 describe("health", () => {
-  it("answers every probe with the version header", async () => {
+  it("answers every probe with the product's version header", async () => {
     for (const path of ["/livez", "/readyz", "/healthz"]) {
       const answer = await fetch(`${base}${path}`);
       assert.equal(answer.status, 200);
-      assert.equal(answer.headers.get("example-version"), "v0.1.0-mock");
+      assert.equal(answer.headers.get("fixture-version"), FIXTURE_VERSION);
     }
   });
 
@@ -53,7 +57,7 @@ describe("sign-in", () => {
       (
         await post(base, "/auth/login", {
           password: "wrong-password",
-          username: "bob",
+          username: "ben",
         })
       ).status,
       401,
@@ -64,7 +68,7 @@ describe("sign-in", () => {
       401,
     );
     assert.equal(
-      (await post(base, "/auth/login", { password: "x", username: "dave" }))
+      (await post(base, "/auth/login", { password: "x", username: "dot" }))
         .status,
       403,
     );
@@ -72,7 +76,7 @@ describe("sign-in", () => {
 
   it("asks for the second factor and refuses the wrong code", async () => {
     const login = (await (
-      await post(base, "/auth/login", { password: "x", username: "alice" })
+      await post(base, "/auth/login", { password: "x", username: "ada" })
     ).json()) as Record<string, string>;
     assert.equal(login.mfaRequired, true);
     assert.equal(
@@ -95,108 +99,132 @@ describe("sign-in", () => {
     );
   });
 
-  it("needs the CSRF header with a cookie session", async () => {
-    const alice = await signIn(base, "alice");
+  it("uses the product's session cookie and needs the CSRF header with it", async () => {
+    const ada = await signIn(base, "ada");
+    assert.match(ada.cookie, /^fixture_session=/);
     const without = await post(
       base,
-      "/query",
-      { query: "{ viewer { name } }" },
-      { cookie: alice.cookie },
+      "/gql",
+      { query: "{ me { name } }" },
+      { cookie: ada.cookie },
     );
     assert.equal(without.status, 401);
-    const { body } = await query(base, "{ viewer { name } }", alice);
-    assert.deepEqual(body.data, { viewer: { name: "Alice Admin" } });
+    const { body } = await query(base, "{ me { name } }", ada);
+    assert.deepEqual(body.data, { me: { name: "Ada Admin" } });
   });
 
   it("reports and ends the session", async () => {
-    const bob = await signIn(base, "bob");
+    const ben = await signIn(base, "ben");
     const session = (await (
-      await fetch(`${base}/auth/session`, { headers: { cookie: bob.cookie } })
+      await fetch(`${base}/auth/session`, { headers: { cookie: ben.cookie } })
     ).json()) as Record<string, unknown>;
-    assert.equal(session.personId, "person-bob");
-    await post(base, "/auth/logout", {}, { cookie: bob.cookie });
-    assert.equal((await query(base, "{ viewer { name } }", bob)).status, 401);
+    assert.equal(session.personId, "person-ben");
+    await post(base, "/auth/logout", {}, { cookie: ben.cookie });
+    assert.equal((await query(base, "{ me { name } }", ben)).status, 401);
   });
 
   it("gives a native client a bearer token that works without a cookie", async () => {
-    const carol = await signIn(base, "carol", true);
-    assert.ok(carol.token);
-    const { body } = await query(base, "{ viewer { username } }", {
+    const cy = await signIn(base, "cy", true);
+    assert.ok(cy.token);
+    const { body } = await query(base, "{ me { username } }", {
       cookie: "",
       csrf: "",
-      token: carol.token,
+      token: cy.token,
     });
-    assert.deepEqual(body.data, { viewer: { username: "carol" } });
+    assert.deepEqual(body.data, { me: { username: "cy" } });
   });
 });
 
 describe("GraphQL", () => {
+  it("serves on the product's own path and nowhere else", async () => {
+    assert.equal(
+      (await post(base, "/gql", { query: "{ status { name } }" })).status,
+      200,
+    );
+    assert.equal(
+      (await post(base, "/query", { query: "{ status { name } }" })).status,
+      501,
+    );
+  });
+
   it("answers a public field before sign-in and refuses the rest", async () => {
-    const open = await query(base, "{ serverInfo { name } }");
-    assert.deepEqual(open.body.data, { serverInfo: { name: "Example" } });
-    const closed = await query(base, "{ serverInfo { name } items { id } }");
+    const open = await query(base, "{ status { name } }");
+    assert.deepEqual(open.body.data, { status: { name: "Fixture" } });
+    const closed = await query(base, "{ status { name } notes { id } }");
     assert.equal(closed.status, 401);
     assert.equal(closed.body.errors?.[0]?.extensions.code, "UNAUTHENTICATED");
   });
 
   it("refuses what the schema doesn't have, and what doesn't parse", async () => {
-    const bob = await signIn(base, "bob");
-    const invalid = await query(base, "{ viewer { shoeSize } }", bob);
+    const ben = await signIn(base, "ben");
+    const invalid = await query(base, "{ me { shoeSize } }", ben);
     assert.equal(invalid.status, 422);
     assert.equal(
       invalid.body.errors?.[0]?.extensions.code,
       "GRAPHQL_VALIDATION_FAILED",
     );
-    const broken = await query(base, "{ viewer {", bob);
+    const broken = await query(base, "{ me {", ben);
     assert.equal(
       broken.body.errors?.[0]?.extensions.code,
       "GRAPHQL_PARSE_FAILED",
     );
   });
 
-  it("answers a role check with FORBIDDEN", async () => {
-    const bob = await signIn(base, "bob");
+  it("answers a role check with FORBIDDEN and a missing record with NOT_FOUND", async () => {
+    const ben = await signIn(base, "ben");
     const refused = await query(
       base,
-      'mutation { deleteItem(id: "item-1") }',
-      bob,
+      'mutation { removeNote(id: "note-1") }',
+      ben,
     );
     assert.equal(refused.body.errors?.[0]?.extensions.code, "FORBIDDEN");
-    const alice = await signIn(base, "alice");
+    const ada = await signIn(base, "ada");
     assert.deepEqual(
-      (await query(base, 'mutation { deleteItem(id: "item-1") }', alice)).body
+      (await query(base, 'mutation { removeNote(id: "note-1") }', ada)).body
         .data,
-      { deleteItem: true },
+      { removeNote: true },
     );
+    const gone = await query(
+      base,
+      'mutation { removeNote(id: "note-1") }',
+      ada,
+    );
+    assert.equal(gone.body.errors?.[0]?.extensions.code, "NOT_FOUND");
   });
 
   it("shares one state between every client", async () => {
-    const bob = await signIn(base, "bob");
-    const carol = await signIn(base, "carol", true);
+    const ben = await signIn(base, "ben");
+    const cy = await signIn(base, "cy", true);
     await query(
       base,
-      "mutation ($t: String!) { createItem(input: { title: $t }) { id } }",
-      bob,
+      "mutation ($t: String!) { addNote(text: $t) { id } }",
+      ben,
       { t: "Shared" },
     );
-    const { body } = await query(base, "{ items { title } }", carol);
+    const { body } = await query(
+      base,
+      "{ notes { text author { username } } }",
+      cy,
+    );
     assert.ok(
-      (body.data?.items as { title: string }[]).some(
-        (index) => index.title === "Shared",
+      (
+        body.data?.notes as { author: { username: string }; text: string }[]
+      ).some(
+        (note) => note.text === "Shared" && note.author.username === "ben",
       ),
     );
   });
 
   it("takes a query in the URL but never a mutation", async () => {
-    const bob = await signIn(base, "bob");
+    const ben = await signIn(base, "ben");
     const read = await fetch(
-      `${base}/query?query=${encodeURIComponent("{ viewer { username } }")}`,
-      { headers: headersFor(bob) },
+      `${base}/gql?query=${encodeURIComponent("{ me { username } }")}`,
+      { headers: headersFor(ben) },
     );
     assert.equal(read.status, 200);
     const write = await fetch(
-      `${base}/query?query=${encodeURIComponent('mutation { deleteItem(id: "item-1") }')}`,
-      { headers: headersFor(bob) },
+      `${base}/gql?query=${encodeURIComponent('mutation { removeNote(id: "note-1") }')}`,
+      { headers: headersFor(ben) },
     );
     assert.equal(write.status, 405);
   });
@@ -204,46 +232,40 @@ describe("GraphQL", () => {
 
 describe("controls", () => {
   it("fails the next call once, as GraphQL or as HTTP", async () => {
-    const bob = await signIn(base, "bob");
+    const ben = await signIn(base, "ben");
     await control(base, { kind: "fail-next" });
     assert.equal(
-      (await query(base, "{ viewer { name } }", bob)).body.errors?.[0]
-        ?.extensions.code,
+      (await query(base, "{ me { name } }", ben)).body.errors?.[0]?.extensions
+        .code,
       "INTERNAL",
     );
-    assert.ok((await query(base, "{ viewer { name } }", bob)).body.data);
+    assert.ok((await query(base, "{ me { name } }", ben)).body.data);
     await control(base, { kind: "fail-next", mode: "http", status: 503 });
     assert.equal(
-      (
-        await post(
-          base,
-          "/query",
-          { query: "{ viewer { name } }" },
-          headersFor(bob),
-        )
-      ).status,
+      (await post(base, "/gql", { query: "{ me { name } }" }, headersFor(ben)))
+        .status,
       503,
     );
   });
 
   it("puts the data back and keeps people signed in", async () => {
-    const alice = await signIn(base, "alice");
-    await query(base, 'mutation { deleteItem(id: "item-1") }', alice);
+    const ada = await signIn(base, "ada");
+    await query(base, 'mutation { removeNote(id: "note-1") }', ada);
     await control(base, { kind: "reset" });
-    const { body } = await query(base, '{ item(id: "item-1") { id } }', alice);
-    assert.deepEqual(body.data, { item: { id: "item-1" } });
+    const { body } = await query(base, '{ note(id: "note-1") { id } }', ada);
+    assert.deepEqual(body.data, { note: { id: "note-1" } });
   });
 
   it("starts fresh with everyone signed out", async () => {
-    const bob = await signIn(base, "bob");
+    const ben = await signIn(base, "ben");
     await control(base, { kind: "fresh" });
-    assert.equal((await query(base, "{ viewer { name } }", bob)).status, 401);
+    assert.equal((await query(base, "{ me { name } }", ben)).status, 401);
   });
 
   it("signs someone in at once, and refuses an unknown kind", async () => {
     const answer = await post(base, "/_mock/controls", {
       kind: "sign-in",
-      personId: "person-carol",
+      personId: "person-cy",
       token: true,
     });
     assert.ok(((await answer.json()) as Record<string, string>).accessToken);
@@ -253,17 +275,22 @@ describe("controls", () => {
     );
   });
 
-  it("runs the product's own controls", async () => {
+  it("runs the product's own controls and shows its summary", async () => {
     const state = await control(base, {
-      kind: "add-item",
-      title: "From the page",
+      kind: "add-note",
+      text: "From the page",
     });
-    assert.equal((state.summary as Record<string, number>).openItems, 4);
+    assert.deepEqual(state.summary, { notes: 3 });
+    assert.ok(
+      (state.actions as { kind: string }[]).some(
+        (action) => action.kind === "add-note",
+      ),
+    );
   });
 
-  it("serves its page", async () => {
+  it("serves its page under the product's name", async () => {
     const page = await fetch(`${base}/_mock`);
-    assert.match(await page.text(), /Mock controls · Example/);
+    assert.match(await page.text(), /Mock controls · Fixture/);
   });
 });
 
@@ -279,8 +306,7 @@ describe("first-run setup", () => {
       password: "x",
       username: "first",
     };
-    const done = await post(base, "/setup/complete", admin);
-    assert.equal(done.status, 200);
+    assert.equal((await post(base, "/setup/complete", admin)).status, 200);
     assert.deepEqual(await (await fetch(`${base}/setup/state`)).json(), {
       needsSetup: false,
     });
@@ -289,40 +315,35 @@ describe("first-run setup", () => {
 });
 
 describe("websocket", () => {
-  const SUBSCRIPTION = "subscription { itemChanged { kind item { title } } }";
+  const SUBSCRIPTION = "subscription { noteAdded { text } }";
 
   it("streams changes over graphql-transport-ws", async () => {
-    const carol = await signIn(base, "carol", true);
+    const cy = await signIn(base, "cy", true);
     const ws = await openSocket(base, "graphql-transport-ws");
-    ws.send({ payload: { authToken: carol.token }, type: "connection_init" });
+    ws.send({ payload: { authToken: cy.token }, type: "connection_init" });
     await ws.next("connection_ack");
     ws.send({ id: "1", payload: { query: SUBSCRIPTION }, type: "subscribe" });
     await new Promise((settle) => setTimeout(settle, 50));
-    await control(base, { kind: "add-item", title: "Heard" });
+    await control(base, { kind: "add-note", text: "Heard" });
     const message = await ws.next("next");
     assert.deepEqual(message.payload, {
-      data: { itemChanged: { item: { title: "Heard" }, kind: "CREATED" } },
+      data: { noteAdded: { text: "Heard" } },
     });
     ws.socket.close();
   });
 
   it("streams over the legacy graphql-ws protocol with a cookie", async () => {
-    const bob = await signIn(base, "bob");
-    const ws = await openSocket(base, "graphql-ws", { cookie: bob.cookie });
+    const ben = await signIn(base, "ben");
+    const ws = await openSocket(base, "graphql-ws", { cookie: ben.cookie });
     ws.send({ type: "connection_init" });
     await ws.next("connection_ack");
     await ws.next("ka");
     ws.send({ id: "a", payload: { query: SUBSCRIPTION }, type: "start" });
     await new Promise((settle) => setTimeout(settle, 50));
-    await control(base, { kind: "add-item", title: "Legacy" });
-    assert.equal(
-      (
-        (await ws.next("data")).payload as {
-          data: { itemChanged: { kind: string } };
-        }
-      ).data.itemChanged.kind,
-      "CREATED",
-    );
+    await control(base, { kind: "add-note", text: "Legacy" });
+    assert.deepEqual((await ws.next("data")).payload, {
+      data: { noteAdded: { text: "Legacy" } },
+    });
     ws.socket.close();
   });
 
@@ -340,9 +361,9 @@ describe("websocket", () => {
   });
 
   it("closes with 4401 when the session ends", async () => {
-    const carol = await signIn(base, "carol", true);
+    const cy = await signIn(base, "cy", true);
     const ws = await openSocket(base, "graphql-transport-ws");
-    ws.send({ payload: { authToken: carol.token }, type: "connection_init" });
+    ws.send({ payload: { authToken: cy.token }, type: "connection_init" });
     await ws.next("connection_ack");
     await control(base, { kind: "expire-session" });
     assert.equal(await ws.closed, 4401);
@@ -366,14 +387,14 @@ describe("routing", () => {
       "http://localhost:3000",
     );
     const other = await fetch(`${base}/livez`, {
-      headers: { origin: "https://evil.example" },
+      headers: { origin: "https://elsewhere.example" },
     });
     assert.equal(other.headers.get("access-control-allow-origin"), null);
     delete process.env.MOCK_CORS_ORIGINS;
   });
 
   it("answers in-process, with no port", async () => {
-    const answer = await handle(new Request("https://mock.invalid/readyz"));
+    const answer = await handle(new Request("http://mock.invalid/readyz"));
     assert.equal(answer.status, 200);
   });
 });

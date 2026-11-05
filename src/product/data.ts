@@ -4,7 +4,13 @@
 // here is made up; example.org never delivers mail. A product replaces the items with its own
 // records and keeps the people's shape, which the sign-in routes read.
 
-import type { Person } from "#core/state.ts";
+import type { ProductData } from "#core/product.ts";
+
+import { mockState } from "#core/state.ts";
+
+export interface ExampleData extends ProductData {
+  items: Item[];
+}
 
 export interface Item {
   id: string;
@@ -14,17 +20,15 @@ export interface Item {
   updatedAt: string;
 }
 
-export interface ProductData {
-  items: Item[];
-  people: Person[];
-}
-
 const MINUTE = 60_000;
 
 const ago = (minutes: number) =>
   new Date(Date.now() - minutes * MINUTE).toISOString();
 
-export const seed = (): ProductData => ({
+/** The data the mock is serving now, as this product's own type. */
+export const data = (): ExampleData => mockState.data as ExampleData;
+
+export const seed = (): ExampleData => ({
   items: [
     {
       id: "item-1",

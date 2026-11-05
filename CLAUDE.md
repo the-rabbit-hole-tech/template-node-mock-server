@@ -22,7 +22,8 @@ says how a product uses the template.
 ## Tests
 
 - Every change to `src/core/` comes with a test in `src/core/server.test.ts` that fails without
-  it. The tests run against a real server on a free port, the way a client calls it.
+  it. Core tests serve the fixture in `src/core/test-fixture.ts`, never `src/product/`; the
+  sample's own tests are in `src/product/product.test.ts`. The tests run against a real server on a free port, the way a client calls it.
 - `npm run lint`, `npm run typecheck` and `npm test` all pass before a push.
 
 ## Logging

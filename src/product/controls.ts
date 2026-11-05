@@ -4,11 +4,11 @@
 // core's (reset, fresh, fail-next, expire-session, sign-in). Each changes the shared state the
 // way something happening elsewhere would, so every client sees it, and open subscriptions hear it.
 
-import type { Action, ControlBody, ProductControl } from "#core/controls.ts";
-import type { Item } from "#product/data.ts";
+import type { ControlBody } from "#core/controls.ts";
+import type { ProductAction } from "#core/product.ts";
 
 import { newId } from "#core/http.ts";
-import { mockState } from "#core/state.ts";
+import { data, type Item } from "#product/data.ts";
 import { announceItem } from "#product/resolvers.ts";
 
 const addItem = (body: ControlBody) => {
@@ -22,15 +22,13 @@ const addItem = (body: ControlBody) => {
         : "An item from the controls",
     updatedAt: new Date().toISOString(),
   };
-  mockState.data.items.push(item);
+  data().items.push(item);
   announceItem(item, "CREATED");
   return { id: item.id };
 };
 
 const finishAll = () => {
-  for (const item of mockState.data.items.filter(
-    (index) => index.status === "OPEN",
-  )) {
+  for (const item of data().items.filter((item) => item.status === "OPEN")) {
     Object.assign(item, {
       status: "DONE",
       updatedAt: new Date().toISOString(),
@@ -39,7 +37,7 @@ const finishAll = () => {
   }
 };
 
-export const productActions: ({ run: ProductControl } & Action)[] = [
+export const productActions: ProductAction[] = [
   {
     hint: "Bob adds it; every open client hears it.",
     kind: "add-item",
@@ -57,9 +55,7 @@ export const productActions: ({ run: ProductControl } & Action)[] = [
 
 /** The counts the controls page shows under Data. */
 export const productSummary = (): Record<string, number> => ({
-  doneItems: mockState.data.items.filter((index) => index.status === "DONE")
-    .length,
-  openItems: mockState.data.items.filter((index) => index.status === "OPEN")
-    .length,
-  people: mockState.data.people.length,
+  doneItems: data().items.filter((item) => item.status === "DONE").length,
+  openItems: data().items.filter((item) => item.status === "OPEN").length,
+  people: data().people.length,
 });
