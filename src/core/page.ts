@@ -164,7 +164,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/22px 
 .tile { display: flex; flex-direction: column; gap: 10px; padding: 18px; border: 1.5px solid var(--border); border-radius: 16px; background: var(--surface); }
 .tile__label { font: 700 12px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .tile__value { font: 700 30px/1 var(--font-mono); }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; align-items: start; }
+.cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .card {
   display: flex; flex-direction: column; gap: 14px; padding: 24px; scroll-margin-top: 16px;
   border: 1px solid var(--border); border-radius: 18px; background: var(--surface);

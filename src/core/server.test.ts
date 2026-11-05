@@ -345,6 +345,18 @@ describe("controls", () => {
     );
   });
 
+  it("puts each section on its own full-width row", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(
+      html,
+      /\.cards \{ display: grid; grid-template-columns: minmax\(0, 1fr\);/,
+    );
+    assert.doesNotMatch(
+      html,
+      /\.(?:card|cards|tiles|head|main) \{[^}]*max-width/,
+    );
+  });
+
   it("shows the product's summary as tiles", async () => {
     const html = await (await fetch(`${base}/_mock`)).text();
     assert.match(
