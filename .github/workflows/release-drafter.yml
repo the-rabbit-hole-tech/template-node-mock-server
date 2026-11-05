@@ -1,9 +1,13 @@
 name: Release Drafter
 
 # Drafts the next release on push to main, using the built-in GITHUB_TOKEN,
-# from .github/release-drafter.yml (the emoji category headings). Nothing tags
-# or publishes on its own: publishing the draft by hand creates the tag, and
-# in a product that also runs the Deploy workflow.
+# from .github/release-drafter.yml (the emoji category headings). The first
+# release is v1.0.0.
+#
+# In a template-* repo it then publishes the draft, which creates the tag:
+# every merge to a template is a release, and products sync from one release
+# tag to the next. A product made from a template has its own name, so there
+# the draft waits, and publishing it by hand is the product's release.
 #
 # Push to main only. The Label Checker workflow applies and checks the label
 # on every PR, so the drafter has nothing to do on pull requests.
@@ -40,5 +44,5 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-name: release-drafter.yml
-          first-version: 0.1.0
           prerelease: false
+          publish: ${{ startsWith(github.event.repository.name, 'template-') }}
