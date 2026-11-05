@@ -2,7 +2,7 @@
 # Ignore everything...
 *
 
-# ...but inject the MIT header into these source types:
+# ...but inject the license header into these source types:
 !*.ts
 !*.tsx
 !*.js

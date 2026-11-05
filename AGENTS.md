@@ -39,7 +39,8 @@ changing it:
 - Lint: `npm run lint` (oxlint, then `oxfmt --check`; `npm run format` fixes the formatting)
 - Typecheck: `npm run typecheck`
 - Test: `npm test`
-- License headers: `task license` (check) and `task license:fix` (inject), MIT "2026 Shane"
+- License headers: `task license` (check) and `task license:fix` (inject): the two-line SPDX
+  Apache-2.0 header, "The template-node-mock-server Authors"
 
 ## Logging
 
