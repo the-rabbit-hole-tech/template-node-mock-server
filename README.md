@@ -52,8 +52,10 @@ keeps the server and swaps the product:** the schema, the data and the resolvers
    It listens on `http://localhost:5180`. Pass `-- --port 0` for a free port; the ready line says
    which one it got.
 
-3. Open the controls at `http://localhost:5180/_mock`, or sign in from a client: any person listed
-   at `/_mock/people`, any password except `wrong-password`, then any six digits except `000000`.
+3. Open the controls at `http://localhost:5180/_mock`, or sign in from a client with a person's
+   username and the password set for them (the sample's are `<username>-password`, and the Users
+   card on `/_mock` changes them), then any six digits except `000000`. A refused sign-in answers
+   an `error` code and a `message` a client can show.
 
 ### Settings
 
@@ -71,15 +73,17 @@ keeps the server and swaps the product:** the schema, the data and the resolvers
 ## 🎛️ Controls
 
 `POST /_mock/controls` with a JSON body takes a `kind`; `GET /_mock/controls` returns what's going
-on, and `GET /_mock/state` the whole state.
+on, `GET /_mock/state` the whole state, and `GET /_mock/people` the people who can sign in. Neither
+ever includes a password: a person shows `hasPassword` instead, so a dev quick-login widget can
+read the list live and offer exactly those people.
 
-| Kind             | Body                                   | What it does                                                                          |
-| ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------- |
-| `sign-in`        | `personId`, `token`                    | A finished sign-in in one step; `token: true` returns a bearer token.                 |
-| `fail-next`      | `mode` (`graphql` or `http`), `status` | The next GraphQL call fails once.                                                     |
-| `expire-session` | `personId` (optional)                  | Ends sessions; open websockets close with 4401.                                       |
-| `reset`          |                                        | The sample data back; everyone stays signed in.                                       |
-| `fresh`          | `firstRun`                             | Back to first boot: everyone signed out, and first-run setup when `firstRun` is true. |
+| Kind             | Body                                   | What it does                                                                                                                                                                           |
+| ---------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sign-in`        | `personId`, `token`                    | A sign-in in one step with the person's own password, skipping the second factor, for a dev quick-login widget; `token: true` returns a bearer token. A refusal says why in `message`. |
+| `fail-next`      | `mode` (`graphql` or `http`), `status` | The next GraphQL call fails once.                                                                                                                                                      |
+| `expire-session` | `personId` (optional)                  | Ends sessions; open websockets close with 4401.                                                                                                                                        |
+| `reset`          |                                        | The sample data back; everyone stays signed in.                                                                                                                                        |
+| `fresh`          | `firstRun`                             | Back to first boot: everyone signed out, and first-run setup when `firstRun` is true.                                                                                                  |
 
 The maintenance cycle has its own kinds, and its own card on the page:
 
@@ -91,7 +95,15 @@ The maintenance cycle has its own kinds, and its own card on the page:
 | `maintenance-end`      |                                 | Back to normal.                                                                                                                                                                                                                                                    |
 | `maintenance-cancel`   |                                 | Drop an announcement that hasn't started.                                                                                                                                                                                                                          |
 
-Reset and start fresh put it back to no maintenance. The sample product adds `add-item` and `finish-items`.
+The people who can sign in have kinds of their own, and the Users card on the page:
+
+| Kind            | Body                                                                                        | What it does                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `person-add`    | `username`, and `name`, `email`, `roles`, `password`, `secondFactor`, `disabled` (optional) | Someone new who can sign in; `roles` is a list or a comma-separated string.                |
+| `person-update` | `personId`, and any of the fields above                                                     | Changes what it's given. A password counts from the next sign-in; an empty one is ignored. |
+| `person-remove` | `personId`                                                                                  | Takes the person out and ends their sessions.                                              |
+
+Reset and start fresh put the seed people back, and no maintenance. The sample product adds `add-item` and `finish-items`.
 
 ## 📦 Use it from a client's tests
 
