@@ -111,6 +111,11 @@ npm run typecheck  # tsc
 npm test           # node --test, against a real server on a free port
 ```
 
+## 🙏 Acknowledgements
+
+template-node-mock-server was originally created by [@Bugs5382](https://github.com/Bugs5382).
+
 ## ⚖️ License
 
-MIT (c) 2026 Shane
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE); [AUTHORS](AUTHORS) lists who holds the
+copyright.
