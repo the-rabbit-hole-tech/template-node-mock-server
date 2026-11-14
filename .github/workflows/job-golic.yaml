@@ -27,6 +27,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
+          cache: false
           go-version: 'stable'
       - name: Install Task
         uses: arduino/setup-task@v2
